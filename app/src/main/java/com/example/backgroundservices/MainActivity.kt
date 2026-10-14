@@ -15,6 +15,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var statusTextView: TextView
     private lateinit var btnStart: Button
+    private lateinit var btnStartWorkout: Button
 
     companion object {
         const val SERVICE_ID =
@@ -45,11 +46,21 @@ class MainActivity : AppCompatActivity() {
 
         statusTextView = findViewById(R.id.statusTextView)
         btnStart = findViewById(R.id.btnStart)
+        btnStartWorkout = findViewById(R.id.btnStartWorkout)
 
         // Menangani intent dari notifikasi
         handleIntent(intent)
 
-        // Tombol untuk memulai background service
+        // Tombol untuk memulai sesi latihan
+        btnStartWorkout.setOnClickListener {
+            statusTextView.text = "Latihan dimulai!"
+
+            btnStartWorkout.isEnabled = false
+            btnStartWorkout.text = "Latihan Dimulai"
+        }
+
+        // Tombol untuk memulai background service.
+        // Fungsi pelacakan lama tetap dipertahankan.
         btnStart.setOnClickListener {
             if (hasAllPermissions()) {
                 startTrackerService(closeActivity = true)
@@ -125,7 +136,7 @@ class MainActivity : AppCompatActivity() {
 
         btnStart.text = "Service Berjalan"
 
-        // Menutup Activity setelah service dimulai
+        // Mempertahankan perilaku lama
         if (closeActivity) {
             finish()
         }
@@ -133,7 +144,8 @@ class MainActivity : AppCompatActivity() {
 
     // Menangani intent dari notifikasi ketika lompatan terdeteksi
     private fun handleIntent(intent: Intent?) {
-        if (intent?.getBooleanExtra(
+        if (
+            intent?.getBooleanExtra(
                 "jump_detected",
                 false
             ) == true
