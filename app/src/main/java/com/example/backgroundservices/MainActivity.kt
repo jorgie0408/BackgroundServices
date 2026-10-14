@@ -35,20 +35,22 @@ class MainActivity : AppCompatActivity() {
         const val EXTRA_END_TIME = "workout_end_time"
     }
 
+    // Meminta izin yang diperlukan
     private val permissionRequest =
         registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
         ) { permissions ->
 
-            val denied = permissions.filterValues {
-                !it
-            }.keys
+            val denied = permissions.filterValues { !it }.keys
 
             if (denied.isEmpty() && hasAllPermissions()) {
                 startTrackerService(closeActivity = true)
             } else {
                 statusTextView.text =
                     "Izin ditolak. Service tidak dapat dijalankan."
+
+                btnStartWorkout.isEnabled = true
+                btnStart.isEnabled = true
             }
         }
 
@@ -64,24 +66,17 @@ class MainActivity : AppCompatActivity() {
 
         btnCalendar.visibility = View.GONE
 
-        // Menangani hasil latihan dari notifikasi
+        // Menampilkan hasil jika aplikasi dibuka dari notifikasi
         handleIntent(intent)
 
-        // Tombol memulai sesi latihan
+        // Tombol utama untuk memulai latihan
         btnStartWorkout.setOnClickListener {
-            statusTextView.text = "Latihan dimulai!"
-
-            btnStartWorkout.isEnabled = false
-            btnStartWorkout.text = "Latihan Dimulai"
+            startWorkout()
         }
 
         // Tombol pelacakan aktivitas tetap dipertahankan
         btnStart.setOnClickListener {
-            if (hasAllPermissions()) {
-                startTrackerService(closeActivity = true)
-            } else {
-                requestRequiredPermissions()
-            }
+            startWorkout()
         }
 
         // Membuka formulir event kalender
@@ -90,27 +85,31 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun startWorkout() {
+        if (hasAllPermissions()) {
+            startTrackerService(closeActivity = true)
+        } else {
+            requestRequiredPermissions()
+        }
+    }
+
     private fun requestRequiredPermissions() {
         val permissions = mutableListOf<String>()
 
+        // Izin aktivitas fisik diperlukan mulai Android 10
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            permissions.add(
-                Manifest.permission.ACTIVITY_RECOGNITION
-            )
+            permissions.add(Manifest.permission.ACTIVITY_RECOGNITION)
         }
 
+        // Izin notifikasi diperlukan mulai Android 13
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissions.add(
-                Manifest.permission.POST_NOTIFICATIONS
-            )
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         }
 
         if (permissions.isEmpty()) {
             startTrackerService(closeActivity = true)
         } else {
-            permissionRequest.launch(
-                permissions.toTypedArray()
-            )
+            permissionRequest.launch(permissions.toTypedArray())
         }
     }
 
@@ -133,9 +132,7 @@ class MainActivity : AppCompatActivity() {
                 notificationPermissionGranted
     }
 
-    private fun startTrackerService(
-        closeActivity: Boolean = false
-    ) {
+    private fun startTrackerService(closeActivity: Boolean = false) {
         val serviceIntent = Intent(
             this,
             TrackerService::class.java
@@ -143,61 +140,64 @@ class MainActivity : AppCompatActivity() {
             action = SERVICE_ID
         }
 
+        // Memulai foreground service
         ContextCompat.startForegroundService(
             this,
             serviceIntent
         )
 
-        statusTextView.text =
-            "Background Service sedang berjalan..."
-
+        statusTextView.text = "Background Service sedang berjalan..."
         btnStart.text = "Service Berjalan"
+        btnStartWorkout.text = "Latihan Sedang Berjalan"
+        btnStartWorkout.isEnabled = false
+        btnStart.isEnabled = false
 
+        // Activity ditutup agar service berjalan di background
         if (closeActivity) {
             finish()
         }
     }
 
-    // Menampilkan hasil latihan ketika aplikasi dibuka dari notifikasi
+    // Menerima hasil latihan dari notifikasi
     private fun handleIntent(intent: Intent?) {
-        if (
-            intent?.getBooleanExtra(
-                EXTRA_JUMP_DETECTED,
-                false
-            ) == true
-        ) {
-            finalJumpCount = intent.getIntExtra(
-                EXTRA_JUMP_COUNT,
-                0
-            )
-
-            workoutStartTime = intent.getLongExtra(
-                EXTRA_START_TIME,
-                System.currentTimeMillis()
-            )
-
-            workoutEndTime = intent.getLongExtra(
-                EXTRA_END_TIME,
-                System.currentTimeMillis()
-            )
-
-            statusTextView.text = "Latihan selesai!"
-
-            jumpCountTextView.text =
-                "Jumlah lompatan: $finalJumpCount"
-
-            btnStart.text = "Start Service Lagi"
-
-            btnStartWorkout.isEnabled = true
-            btnStartWorkout.text = "Mulai Latihan Lagi"
-
-            btnCalendar.visibility = View.VISIBLE
+        if (intent?.getBooleanExtra(EXTRA_JUMP_DETECTED, false) != true) {
+            return
         }
+
+        finalJumpCount = intent.getIntExtra(EXTRA_JUMP_COUNT, 0)
+
+        workoutStartTime = intent.getLongExtra(
+            EXTRA_START_TIME,
+            0L
+        )
+
+        workoutEndTime = intent.getLongExtra(
+            EXTRA_END_TIME,
+            0L
+        )
+
+        statusTextView.text = "Latihan selesai!"
+
+        jumpCountTextView.text =
+            "Jumlah lompatan: $finalJumpCount"
+
+        btnStart.text = "Mulai Lacak Aktivitas"
+        btnStartWorkout.text = "Mulai Latihan Lagi"
+
+        btnStart.isEnabled = true
+        btnStartWorkout.isEnabled = true
+
+        btnCalendar.visibility = View.VISIBLE
+
+        // Mencegah hasil lama diproses kembali saat Activity dibuat ulang
+        setIntent(Intent(this, MainActivity::class.java))
     }
 
-    // Membuat event menggunakan aplikasi kalender perangkat
+    // Membuka formulir untuk menyimpan event kalender
     private fun createCalendarEvent() {
-        if (workoutStartTime <= 0L || workoutEndTime <= 0L) {
+        if (workoutStartTime <= 0L ||
+            workoutEndTime <= workoutStartTime
+        ) {
             statusTextView.text =
                 "Waktu latihan tidak tersedia. Silakan ulangi latihan."
             return
@@ -238,6 +238,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Dipanggil ketika Activity yang sama menerima intent baru
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
