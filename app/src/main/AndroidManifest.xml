@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Izin menjalankan foreground service -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <!-- Izin foreground service untuk aktivitas fisik -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+
+    <!-- Izin membaca aktivitas fisik -->
+    <uses-permission
+        android:name="android.permission.ACTIVITY_RECOGNITION" />
+
+    <!-- Izin notifikasi Android 13+ -->
+    <uses-permission
+        android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:allowBackup="true"
+        android:label="BackgroundServices"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.BackgroundServices">
+
+        <!-- Activity utama -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+        </activity>
+
+        <!-- TrackerService cukup dideklarasikan satu kali -->
+        <service
+            android:name=".TrackerService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="health" />
+
+    </application>
+
+</manifest>
