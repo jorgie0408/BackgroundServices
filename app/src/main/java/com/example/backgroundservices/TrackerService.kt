@@ -21,25 +21,35 @@ class TrackerService : Service(), SensorEventListener {
 
     companion object {
         const val TAG = "TrackerService"
+
         const val CHANNEL_ID = "tracker_service_channel"
         const val JUMP_CHANNEL_ID = "jump_notification_channel"
+
         const val RUNNING_NOTIFICATION_ID = 1001
         const val JUMP_NOTIFICATION_ID = 1002
 
-        // Threshold percepatan sensor
+        // Threshold percepatan akselerometer
         const val JUMP_THRESHOLD = 15f
 
         // Latihan selesai setelah lebih dari 2 gerakan
         const val MAX_JUMPS = 3
 
+        // Data yang dikirim ke MainActivity
         const val EXTRA_JUMP_COUNT = "jump_count"
+        const val EXTRA_JUMP_DETECTED = "jump_detected"
+        const val EXTRA_START_TIME = "workout_start_time"
+        const val EXTRA_END_TIME = "workout_end_time"
     }
 
     private lateinit var sensorManager: SensorManager
     private var accelerometer: Sensor? = null
+
     private var isDetecting = false
     private var lastJumpTime = 0L
     private var jumpCount = 0
+
+    private var workoutStartTime = 0L
+    private var workoutEndTime = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -48,7 +58,9 @@ class TrackerService : Service(), SensorEventListener {
             getSystemService(SENSOR_SERVICE) as SensorManager
 
         accelerometer =
-            sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+            sensorManager.getDefaultSensor(
+                Sensor.TYPE_ACCELEROMETER
+            )
 
         createNotificationChannels()
 
@@ -57,12 +69,14 @@ class TrackerService : Service(), SensorEventListener {
 
     private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+
             val runningChannel = NotificationChannel(
                 CHANNEL_ID,
                 "Background Service",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Notifikasi saat service berjalan"
+                description =
+                    "Notifikasi saat service berjalan"
             }
 
             val jumpChannel = NotificationChannel(
@@ -70,11 +84,14 @@ class TrackerService : Service(), SensorEventListener {
                 "Deteksi Lompatan",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Notifikasi ketika latihan selesai"
+                description =
+                    "Notifikasi ketika latihan selesai"
             }
 
             val manager =
-                getSystemService(NotificationManager::class.java)
+                getSystemService(
+                    NotificationManager::class.java
+                )
 
             manager.createNotificationChannel(runningChannel)
             manager.createNotificationChannel(jumpChannel)
@@ -82,7 +99,10 @@ class TrackerService : Service(), SensorEventListener {
     }
 
     private fun buildServiceRunningNotification(): Notification {
-        val openAppIntent = Intent(this, MainActivity::class.java)
+        val openAppIntent = Intent(
+            this,
+            MainActivity::class.java
+        )
 
         val pendingIntent = PendingIntent.getActivity(
             this,
@@ -92,10 +112,15 @@ class TrackerService : Service(), SensorEventListener {
                     PendingIntent.FLAG_IMMUTABLE
         )
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        return NotificationCompat.Builder(
+            this,
+            CHANNEL_ID
+        )
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle("Background Service Aktif")
-            .setContentText("Sedang mendeteksi gerakan")
+            .setContentText(
+                "Sedang mendeteksi gerakan"
+            )
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -108,7 +133,10 @@ class TrackerService : Service(), SensorEventListener {
         val sensor = accelerometer
 
         if (sensor == null) {
-            Log.e(TAG, "Sensor akselerometer tidak tersedia")
+            Log.e(
+                TAG,
+                "Sensor akselerometer tidak tersedia"
+            )
             stopSelf()
             return
         }
@@ -122,7 +150,10 @@ class TrackerService : Service(), SensorEventListener {
             SensorManager.SENSOR_DELAY_NORMAL
         )
 
-        Log.d(TAG, "Deteksi dimulai: $isDetecting")
+        Log.d(
+            TAG,
+            "Deteksi dimulai: $isDetecting"
+        )
     }
 
     override fun onStartCommand(
@@ -131,7 +162,13 @@ class TrackerService : Service(), SensorEventListener {
         startId: Int
     ): Int {
 
-        val notification = buildServiceRunningNotification()
+        // Catat waktu mulai saat service pertama kali berjalan
+        if (workoutStartTime == 0L) {
+            workoutStartTime = System.currentTimeMillis()
+        }
+
+        val notification =
+            buildServiceRunningNotification()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
@@ -146,7 +183,10 @@ class TrackerService : Service(), SensorEventListener {
             )
         }
 
-        Log.d(TAG, "Foreground service berjalan")
+        Log.d(
+            TAG,
+            "Foreground service berjalan"
+        )
 
         startJumpDetection()
 
@@ -174,11 +214,12 @@ class TrackerService : Service(), SensorEventListener {
 
         Log.d(
             TAG,
-            "X=$x, Y=$y, Z=$z, Acceleration=$acceleration, Count=$jumpCount"
+            "X=$x, Y=$y, Z=$z, " +
+                    "Acceleration=$acceleration, Count=$jumpCount"
         )
 
         // Hitung gerakan jika threshold terlewati.
-        // Jeda 1,5 detik mencegah satu gerakan dihitung berulang.
+        // Jeda 1,5 detik mencegah hitungan berulang terlalu cepat.
         if (
             acceleration > JUMP_THRESHOLD &&
             currentTime - lastJumpTime > 1500L
@@ -192,19 +233,30 @@ class TrackerService : Service(), SensorEventListener {
             )
 
             if (jumpCount >= MAX_JUMPS) {
-                Log.d(
-                    TAG,
-                    "Batas gerakan tercapai. Latihan selesai."
-                )
-
-                showJumpNotification(jumpCount)
-
-                // Hentikan sensor dan service
-                sensorManager.unregisterListener(this)
-                isDetecting = false
-                stopSelf()
+                finishWorkout()
             }
         }
+    }
+
+    private fun finishWorkout() {
+        if (!isDetecting) return
+
+        workoutEndTime = System.currentTimeMillis()
+
+        Log.d(
+            TAG,
+            "Latihan selesai. Jumlah gerakan: $jumpCount"
+        )
+
+        // Hentikan sensor sebelum service dihentikan
+        sensorManager.unregisterListener(this)
+        isDetecting = false
+
+        // Kirim hasil latihan melalui notifikasi
+        showJumpNotification(jumpCount)
+
+        // Hentikan foreground service
+        stopSelf()
     }
 
     private fun showJumpNotification(count: Int) {
@@ -215,8 +267,25 @@ class TrackerService : Service(), SensorEventListener {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP
 
-            putExtra("jump_detected", true)
-            putExtra(EXTRA_JUMP_COUNT, count)
+            putExtra(
+                EXTRA_JUMP_DETECTED,
+                true
+            )
+
+            putExtra(
+                EXTRA_JUMP_COUNT,
+                count
+            )
+
+            putExtra(
+                EXTRA_START_TIME,
+                workoutStartTime
+            )
+
+            putExtra(
+                EXTRA_END_TIME,
+                workoutEndTime
+            )
         }
 
         val pendingIntent = PendingIntent.getActivity(
@@ -231,24 +300,34 @@ class TrackerService : Service(), SensorEventListener {
             this,
             JUMP_CHANNEL_ID
         )
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(
+                android.R.drawable.ic_dialog_info
+            )
             .setContentTitle("Latihan Selesai")
             .setContentText(
-                "Terdeteksi $count gerakan. Service telah dihentikan."
+                "Terdeteksi $count gerakan. " +
+                        "Background service telah dihentikan."
             )
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(
+                NotificationCompat.PRIORITY_HIGH
+            )
             .build()
 
         val manager =
-            getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            getSystemService(
+                NOTIFICATION_SERVICE
+            ) as NotificationManager
 
-        manager.notify(JUMP_NOTIFICATION_ID, notification)
+        manager.notify(
+            JUMP_NOTIFICATION_ID,
+            notification
+        )
 
         Log.d(
             TAG,
-            "Notifikasi latihan selesai: $count gerakan"
+            "Notifikasi selesai ditampilkan: $count gerakan"
         )
     }
 
@@ -265,7 +344,10 @@ class TrackerService : Service(), SensorEventListener {
 
         stopForeground(STOP_FOREGROUND_REMOVE)
 
-        Log.d(TAG, "TrackerService dihentikan")
+        Log.d(
+            TAG,
+            "TrackerService dihentikan"
+        )
 
         super.onDestroy()
     }
